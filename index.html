@@ -54,6 +54,18 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .subcat-panel .subsection{margin:0 0 8px}
 .sub-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;font-size:14px}
 .sub-item button{min-height:32px;padding:4px 8px;font-size:12px}
+.pick-grid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}
+.pick-btn{min-width:calc(33.33% - 8px);flex:1 1 calc(33.33% - 8px);background:#25252e;color:#fff;border:1px solid transparent;font-size:14px;padding:10px 8px}
+.pick-btn.selected{border-color:var(--accent);background:#2a2540;box-shadow:inset 0 0 0 1px var(--accent)}
+.pick-btn .cat-dot{margin-right:2px}
+.pick-label{font-size:12px;color:var(--muted);margin:10px 0 4px;text-align:left}
+.manual-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;background:transparent;color:inherit;padding:0;min-height:0;font-weight:700;font-size:17px;text-align:left}
+.manual-toggle .chev{color:var(--muted);font-weight:500;font-size:14px}
+#manualBody{margin-top:12px}
+#manualBody[hidden]{display:none!important}
+.filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.filter-chips button{flex:0 0 auto;font-size:12px;padding:7px 10px;min-height:36px;background:#25252e;color:#fff}
+.filter-chips button.active{background:var(--accent)}
 </style>
 </head>
 <body>
@@ -63,12 +75,15 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 <div class="card timer">
   <div class="sub" id="status"><span id="statusDot" hidden></span><span id="statusText">Idle</span></div>
   <div class="time" id="clock">00:00:00</div>
-  <select id="category"></select>
+  <div class="pick-label">Category</div>
+  <div id="catButtons" class="pick-grid"></div>
   <div id="subRow" hidden>
-    <select id="subcategory"></select>
+    <div class="pick-label">Subcategory</div>
+    <div id="subButtons" class="pick-grid"></div>
   </div>
-  <div id="tagRow" hidden>
-    <input id="sessionTag" list="tagList" placeholder="Title / name (optional)" maxlength="80" autocomplete="off">
+  <div id="tagRow">
+    <div class="pick-label">Tag (optional)</div>
+    <input id="sessionTag" list="tagList" placeholder="Title / name" maxlength="80" autocomplete="off">
     <datalist id="tagList"></datalist>
   </div>
   <div class="row" style="margin-top:12px">
@@ -93,6 +108,7 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   <div class="row" style="margin-bottom:12px">
     <button class="secondary" id="periodToday" type="button" style="flex:1">Go to today</button>
   </div>
+  <div class="filter-chips" id="dayFilterChips" hidden></div>
   <div id="periodStatsAll" class="stats">
     <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total</div></div>
     <div class="stat" id="periodAvgStat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Daily average</div></div>
@@ -102,6 +118,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="stat jump" type="button" data-jump="week"><div class="num" id="focusWeek">0m</div><div class="label">Week</div></button>
     <button class="stat jump" type="button" data-jump="month"><div class="num" id="focusMonth">0m</div><div class="label">Month</div></button>
   </div>
+  <div class="subsection" id="periodDowLabel" hidden>By day of week</div>
+  <div id="periodDow" hidden></div>
   <div class="subsection">Share</div>
   <div id="periodDonut"></div>
   <div class="subsection">By category</div>
@@ -126,6 +144,24 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="secondary" id="addCat" type="button">Add</button>
   </div>
   <div id="catList" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+  <button class="manual-toggle" id="manualToggle" type="button" aria-expanded="false">
+    <span>Add time manually</span>
+    <span class="chev" id="manualChev">▸</span>
+  </button>
+  <div id="manualBody" hidden>
+    <div class="row">
+      <input id="manualDate" type="date" aria-label="Date">
+      <input id="manualTime" type="time" value="12:00" aria-label="Start time">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="manualMins" type="number" min="1" step="1" placeholder="Minutes" aria-label="Duration in minutes">
+      <button class="secondary" id="addManual" type="button">Add</button>
+    </div>
+    <p class="note" style="margin:8px 0 0">Uses the category, subcategory and tag selected in the timer.</p>
+  </div>
 </div>
 
 <div class="card">
@@ -198,6 +234,22 @@ let periodAnchor=new Date();
 let selectedStatCat=null;
 let selectedStatSub=null;
 let selectedStatTag=null;
+let pickCat="";
+let pickSub="";
+let dayFilter="all"; // all | weekdays | weekend | 0..6 (Sun..Sat)
+const DOW_NAMES=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DAY_FILTERS=[
+ {id:"all",label:"All"},
+ {id:"weekdays",label:"Weekdays"},
+ {id:"weekend",label:"Weekend"},
+ {id:"1",label:"Mon"},
+ {id:"2",label:"Tue"},
+ {id:"3",label:"Wed"},
+ {id:"4",label:"Thu"},
+ {id:"5",label:"Fri"},
+ {id:"6",label:"Sat"},
+ {id:"0",label:"Sun"}
+];
 
 function sessionSub(x){return(x&&x.subcategory&&String(x.subcategory).trim())||""}
 function sessionTag(x){return(x&&x.tag&&String(x.tag).trim())||""}
@@ -205,6 +257,7 @@ function subLabel(s){return s?s:NOSUB}
 function tagLabel(tag){return tag?tag:NOTITLE}
 function knownTags(cat,sub){
  const set=new Set();
+ if(!cat)return [];
  db.sessions.forEach(x=>{
   if(x.category!==cat)return;
   if(sub!==undefined&&sub!==null&&sessionSub(x)!==sub)return;
@@ -217,23 +270,45 @@ function knownTags(cat,sub){
  }
  return [...set].sort((a,b)=>a.localeCompare(b,LOCALE));
 }
-function updateMetaRows(){
- const cat=$("category").value;
- const subs=subsOf(cat);
+function dayMatchesFilter(d){
+ const dow=d.getDay();
+ if(dayFilter==="all")return true;
+ if(dayFilter==="weekdays")return dow>=1&&dow<=5;
+ if(dayFilter==="weekend")return dow===0||dow===6;
+ return dow===Number(dayFilter);
+}
+function renderDayFilterChips(){
+ const el=$("dayFilterChips");
+ const period=currentPeriod();
+ el.hidden=period==="day";
+ if(el.hidden)return;
+ el.innerHTML=DAY_FILTERS.map(f=>`<button type="button" class="${dayFilter===f.id?"active":""}" data-day-filter="${f.id}">${esc(f.label)}</button>`).join("");
+}
+function selectedPick(){
+ return{category:pickCat,subcategory:pickSub,tag:($("sessionTag").value||"").trim()};
+}
+function renderPickers(){
+ if(!pickCat||!db.categories.includes(pickCat)) pickCat=db.categories[0]||"";
+ if(db.active){pickCat=db.active.category;pickSub=sessionSub(db.active)}
+ const lock=!!db.active;
+ $("catButtons").innerHTML=db.categories.map(c=>{
+  const sel=c===pickCat?" selected":"";
+  const dis=lock&&c!==pickCat?" disabled":"";
+  return `<button type="button" class="pick-btn pick-cat${sel}" data-cat="${esc(c)}"${dis}><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</button>`;
+ }).join("");
+ const subs=subsOf(pickCat);
  $("subRow").hidden=!subs.length;
  if(subs.length){
-  const cur=db.active&&db.active.category===cat?sessionSub(db.active):$("subcategory").value;
-  $("subcategory").innerHTML=`<option value="">—</option>`+subs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
-  if(subs.includes(cur))$("subcategory").value=cur;
- }
- const showTag=subs.length>0;
- $("tagRow").hidden=!showTag;
- if(showTag){
-  const sub=$("subcategory").value;
-  $("tagList").innerHTML=knownTags(cat,sub||null).map(t=>`<option value="${esc(t)}"></option>`).join("");
-  if(db.active&&db.active.category===cat)$("sessionTag").value=sessionTag(db.active);
- }
+  if(pickSub&&!subs.includes(pickSub)) pickSub="";
+  $("subButtons").innerHTML=
+   `<button type="button" class="pick-btn pick-sub${!pickSub?" selected":""}" data-sub=""${lock?" disabled":""}>Any</button>`+
+   subs.map(s=>`<button type="button" class="pick-btn pick-sub${pickSub===s?" selected":""}" data-sub="${esc(s)}"${lock?" disabled":""}>${esc(s)}</button>`).join("");
+ }else pickSub="";
+ $("tagList").innerHTML=knownTags(pickCat,subs.length?(pickSub||null):null).map(t=>`<option value="${esc(t)}"></option>`).join("");
+ if(db.active)$("sessionTag").value=sessionTag(db.active);
+ $("sessionTag").disabled=lock;
 }
+function updateMetaRows(){renderPickers()}
 function matchesFocus(x){
  if(selectedStatCat&&x.category!==selectedStatCat)return false;
  if(selectedStatSub!==null&&sessionSub(x)!==selectedStatSub)return false;
@@ -334,8 +409,48 @@ function clipSessionSeconds(x,rangeStart,rangeEnd){
  const now=Date.now();
  const endCap=Math.min(rangeEnd.getTime(),now);
  if(x.end<=rangeStart.getTime()||x.start>=endCap)return 0;
- const a=Math.max(x.start,rangeStart.getTime()),b=Math.min(x.end,endCap);
- return Math.max(0,(b-a)/1000);
+ if(dayFilter==="all"){
+  const a=Math.max(x.start,rangeStart.getTime()),b=Math.min(x.end,endCap);
+  return Math.max(0,(b-a)/1000);
+ }
+ let total=0;
+ let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
+ const last=endOfDay(new Date(Math.min(x.end,endCap)));
+ while(d<=last){
+  if(dayMatchesFilter(d)){
+   const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
+   const a=Math.max(x.start,rangeStart.getTime(),dayStart);
+   const b=Math.min(x.end,endCap,dayEnd);
+   total+=Math.max(0,(b-a)/1000);
+  }
+  d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
+ }
+ return total;
+}
+function countFilterDays(rangeStart,rangeEnd){
+ let n=0;
+ for(let d=startOfDay(rangeStart);d<=rangeEnd;d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)){
+  if(d.getTime()>Date.now())break;
+  if(dayMatchesFilter(d)) n++;
+ }
+ return Math.max(1,n);
+}
+function aggregateByWeekday(sessions,rangeStart,rangeEnd){
+ const map={0:0,1:0,2:0,3:0,4:0,5:0,6:0};let total=0;
+ sessions.forEach(x=>{
+  let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
+  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())));
+  while(d<=last){
+   const dow=d.getDay();
+   const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
+   const a=Math.max(x.start,rangeStart.getTime(),dayStart);
+   const b=Math.min(x.end,rangeEnd.getTime(),dayEnd,Date.now());
+   const sec=Math.max(0,(b-a)/1000);
+   if(sec>0){map[dow]+=sec;total+=sec}
+   d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
+  }
+ });
+ return {map,total};
 }
 
 function sessionsInPeriod(period,anchor){
@@ -360,13 +475,15 @@ function aggregateByDayKey(sessions,rangeStart,rangeEnd){
   let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
   const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime())));
   while(d<=last){
-   const dk=dayKey(d);
-   const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
-   const a=Math.max(x.start,rangeStart.getTime(),dayStart);
-   const b=Math.min(x.end,rangeEnd.getTime(),dayEnd,Date.now());
-   const sec=Math.max(0,(b-a)/1000);
-   if(sec>0)by[dk]=(by[dk]||0)+sec;
-   d.setDate(d.getDate()+1);
+   if(dayMatchesFilter(d)){
+    const dk=dayKey(d);
+    const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
+    const a=Math.max(x.start,rangeStart.getTime(),dayStart);
+    const b=Math.min(x.end,rangeEnd.getTime(),dayEnd,Date.now());
+    const sec=Math.max(0,(b-a)/1000);
+    if(sec>0)by[dk]=(by[dk]||0)+sec;
+   }
+   d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
   }
  });
  return by;
@@ -478,7 +595,6 @@ function sessionTitle(x){
 }
 
 function renderCategories(){
- $("category").innerHTML=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
  $("catList").innerHTML=db.categories.map((c,i)=>{
   const subs=subsOf(c);
   return `<div class="cat-block">
@@ -500,6 +616,7 @@ function renderCategories(){
   </div>
  </div>`;
  }).join("");
+ renderPickers();
 }
 
 function renderFocusStats(focus){
@@ -567,24 +684,27 @@ function renderDaySessions(sessions,rangeStart,rangeEnd){
 
 function renderPeriod(){
  const period=currentPeriod();
+ if(period==="day") dayFilter="all";
  const {start,end,spanDays}=periodBounds(period,periodAnchor);
  $("periodTitle").textContent=periodTitle(period,periodAnchor);
+ renderDayFilterChips();
  const ss=sessionsInPeriod(period,periodAnchor);
  const {map,total}=aggregateByCategory(ss,start,end);
  if(selectedStatCat&&!db.categories.includes(selectedStatCat)) selectedStatCat=null;
- const elapsedDays=period==="day"?1:Math.min(spanDays,Math.max(1,Math.ceil((Math.min(Date.now(),end.getTime())-start.getTime())/86400000)));
+ const elapsedDays=period==="day"?1:countFilterDays(start,end);
  const focus=selectedStatCat;
  if(!focus){selectedStatSub=null;selectedStatTag=null}
  const ssFocus=ss.filter(matchesFocus);
  const focusTotal=focus?ssFocus.reduce((a,x)=>a+clipSessionSeconds(x,start,end),0):total;
+ const filterNote=dayFilter==="all"?"":` · ${DAY_FILTERS.find(f=>f.id===dayFilter)?.label||dayFilter}`;
 
  if(!focus){
   $("periodTotal").textContent=short(total);
   $("periodTotal").style.color="";
   $("periodAvg").style.color="";
-  $("periodLabel").textContent=period==="day"?"Total for day":"Total for period";
+  $("periodLabel").textContent=(period==="day"?"Total for day":"Total for period")+filterNote;
   $("periodAvg").textContent=short(total/elapsedDays);
-  $("periodAvgLabel").textContent="Daily average";
+  $("periodAvgLabel").textContent=dayFilter==="all"?"Daily average":"Average per matching day";
   $("periodAvgStat").hidden=period==="day";
   $("periodStatsAll").classList.toggle("stats-1",period==="day");
  }else{
@@ -596,6 +716,31 @@ function renderPeriod(){
  const entries=sortedCategoryEntries(map);
  renderDonut(entries,total);
  renderCategoryBars(entries,total);
+
+  if(period!=="day"){
+  const dowAgg=aggregateByWeekday(ssFocus,start,end);
+  const order=[1,2,3,4,5,6,0].filter(d=>dayMatchesFilter(new Date(2024,0,7+d))); // 2024-01-07=Sun
+  const dowEntries=order.map(d=>[String(d),dowAgg.map[d]||0]);
+  const dowTotal=dowEntries.reduce((a,[,t])=>a+t,0);
+  if(dowTotal>0){
+   $("periodDowLabel").hidden=false;$("periodDow").hidden=false;
+   $("periodDowLabel").textContent="By day of week"+filterNote;
+   const max=Math.max(...dowEntries.map(e=>e[1]),1);
+   $("periodDow").innerHTML=`<div class="hbar-list">${dowEntries.map(([d,t])=>{
+    const w=Math.max(2,(t/max)*100);
+    const pct=Math.round(t/Math.max(dowTotal,1)*100);
+    return `<div class="hbar-row">
+     <span class="cat-name">${esc(DOW_NAMES[Number(d)])}</span>
+     <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:${esc(focus?catColor(focus):"var(--accent)")}"></div></div>
+     <span class="hbar-val">${short(t)} · ${pct}%</span>
+    </div>`;
+   }).join("")}</div>`;
+  }else{
+   $("periodDowLabel").hidden=true;$("periodDow").hidden=true;
+  }
+ }else{
+  $("periodDowLabel").hidden=true;$("periodDow").hidden=true;
+ }
 
  if(focus&&(subsOf(focus).length||ss.some(x=>x.category===focus&&sessionSub(x)))){
   const base=ss.filter(x=>x.category===focus);
@@ -611,8 +756,8 @@ function renderPeriod(){
   const base=ss.filter(x=>x.category===focus&&(selectedStatSub===null||sessionSub(x)===selectedStatSub));
   const tagAgg=aggregateByKey(base,start,end,sessionTag);
   const tagEntries=Object.entries(tagAgg.map).filter(([k,t])=>k||t>0).sort((a,b)=>b[1]-a[1]);
-  if(tagEntries.some(([k])=>k)||selectedStatSub!==null){
-   const tagTitle=selectedStatTag!==null?`By title · ${tagLabel(selectedStatTag)}`:"By title";
+  if(tagEntries.length){
+   const tagTitle=selectedStatTag!==null?`By tag · ${tagLabel(selectedStatTag)}`:"By tag";
    renderKeyedBars("periodTags","periodTagsLabel",tagEntries,tagAgg.total||1,catColor(focus),"tag",selectedStatTag,tagLabel,tagTitle);
   }else{
    $("periodTagsLabel").hidden=true;$("periodTags").hidden=true;
@@ -636,7 +781,7 @@ function renderPeriod(){
   return;
  }
  if(period==="year"){
-  bl.textContent=focus?`By month · ${focusTitle}`:"By month";
+  bl.textContent=(focus?`By month · ${focusTitle}`:"By month")+filterNote;
   const byMonth=aggregateByMonth(ssFocus,start,end);
   const rows=[];
   for(let m=0;m<12;m++){
@@ -654,10 +799,11 @@ function renderPeriod(){
    <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%;${fillColor?`background:${esc(fillColor)}`:""}"></div></div>`).join("");
   return;
  }
- bl.textContent=(period==="week"?"By day":"By day of month")+(focus?` · ${focusTitle}`:"");
+ bl.textContent=(period==="week"?"By day":"By day of month")+(focus?` · ${focusTitle}`:"")+filterNote;
  const byDay=aggregateByDayKey(ssFocus,start,end);
  const rows=[];
  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+  if(!dayMatchesFilter(d)) continue;
   const dk=dayKey(d);
   const t=byDay[dk]||0;
   const label=d.toLocaleDateString(LOCALE,locDate);
@@ -692,32 +838,27 @@ function render(){
    $("statusDot").hidden=false;$("statusDot").style.background=col;
    $("clock").style.color=col;
    $("start").disabled=true;$("stop").disabled=false;
-   $("category").value=db.active.category;$("category").disabled=true;
  }else{
    $("statusText").textContent="Idle";
    $("statusDot").hidden=true;$("clock").style.color="";
-   $("start").disabled=false;$("stop").disabled=true;$("category").disabled=false;
+   $("start").disabled=false;$("stop").disabled=true;
  }
  updateMetaRows();
- const lock=!!db.active;
- $("subcategory").disabled=lock;
- $("sessionTag").disabled=lock;
+ if(!$("manualDate").value){
+  const t=new Date();
+  $("manualDate").value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+ }
  renderPeriod();
 }
 
 function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
 
-$("category").addEventListener("change",updateMetaRows);
-$("subcategory").addEventListener("change",()=>{
- const cat=$("category").value;
- $("tagList").innerHTML=knownTags(cat,$("subcategory").value||null).map(t=>`<option value="${esc(t)}"></option>`).join("");
-});
 $("start").addEventListener("click",()=>{
  if(db.active)return;
- const category=$("category").value;
- const subcategory=subsOf(category).length?$("subcategory").value.trim():"";
- const tag=subsOf(category).length?$("sessionTag").value.trim():"";
- db.active={category,start:Date.now(),...(subcategory?{subcategory}:{}),...(tag?{tag}:{})};save();render();
+ if(!pickCat){alert("Choose a category.");return}
+ const subcategory=subsOf(pickCat).length?pickSub:"";
+ const tag=($("sessionTag").value||"").trim();
+ db.active={category:pickCat,start:Date.now(),...(subcategory?{subcategory}:{}),...(tag?{tag}:{})};save();render();
 });
 $("stop").addEventListener("click",()=>{
  if(!db.active)return;
@@ -726,6 +867,33 @@ $("stop").addEventListener("click",()=>{
  if(sessionTag(db.active)) row.tag=sessionTag(db.active);
  db.sessions.push(row);
  db.active=null;save();render();tick();
+});
+$("manualToggle").addEventListener("click",()=>{
+ const body=$("manualBody");
+ const open=body.hidden;
+ body.hidden=!open;
+ $("manualToggle").setAttribute("aria-expanded",open?"true":"false");
+ $("manualChev").textContent=open?"▾":"▸";
+});
+$("addManual").addEventListener("click",()=>{
+ if(!pickCat){alert("Choose a category.");return}
+ const dateStr=$("manualDate").value;
+ const timeStr=$("manualTime").value||"12:00";
+ const mins=Number($("manualMins").value);
+ if(!dateStr){alert("Choose a date.");return}
+ if(!Number.isFinite(mins)||mins<=0){alert("Enter duration in minutes.");return}
+ const start=new Date(`${dateStr}T${timeStr}:00`);
+ if(Number.isNaN(start.getTime())){alert("Invalid date or time.");return}
+ const end=start.getTime()+Math.round(mins*60000);
+ if(end>Date.now()+60000){alert("End time cannot be in the future.");return}
+ const subcategory=subsOf(pickCat).length?pickSub:"";
+ const tag=($("sessionTag").value||"").trim();
+ const row={category:pickCat,start:start.getTime(),end};
+ if(subcategory) row.subcategory=subcategory;
+ if(tag) row.tag=tag;
+ db.sessions.push(row);
+ $("manualMins").value="";
+ save();render();
 });
 function addCategory(){
  const c=$("newCat").value.trim();
@@ -748,6 +916,18 @@ document.addEventListener("input",e=>{
 });
 
 document.addEventListener("click",e=>{
+ const df=e.target.closest("[data-day-filter]");
+ if(df){
+   dayFilter=df.dataset.dayFilter;renderPeriod();return;
+ }
+ const pc=e.target.closest(".pick-cat");
+ if(pc&&!pc.disabled){
+   pickCat=pc.dataset.cat;pickSub="";renderPickers();return;
+ }
+ const ps=e.target.closest(".pick-sub");
+ if(ps&&!ps.disabled){
+   pickSub=ps.dataset.sub||"";renderPickers();return;
+ }
  const b=e.target.closest(".renameCat");
  if(b){
    const i=Number(b.dataset.i),old=db.categories[i],name=prompt("Category name:",old);
@@ -762,6 +942,7 @@ document.addEventListener("click",e=>{
    db.sessions.forEach(x=>{if(x.category===old)x.category=n});
    if(db.active?.category===old)db.active.category=n;
    if(selectedStatCat===old) selectedStatCat=n;
+   if(pickCat===old) pickCat=n;
    save();render();return;
  }
  const as=e.target.closest(".addSub");
@@ -820,10 +1001,10 @@ document.addEventListener("click",e=>{
      if(sub&&!available.includes(sub)){alert("Unknown subcategory.");return}
    }else sub="";
    let tag=sessionTag(x);
-   if(available.length){
-     const t=prompt("Title / name (optional):",tag);if(t===null)return;
+   {
+     const t=prompt("Tag / title (optional):",tag);if(t===null)return;
      tag=t.trim();
-   }else tag="";
+   }
    let dur=prompt("Duration in minutes:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
    const mins=Number(dur);
    if(!Number.isFinite(mins)||mins<=0){alert("Invalid duration.");return}
@@ -849,7 +1030,7 @@ document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",
 }));
 $("periodPrev").addEventListener("click",()=>{shiftAnchor(currentPeriod(),-1);renderPeriod()});
 $("periodNext").addEventListener("click",()=>{shiftAnchor(currentPeriod(),1);renderPeriod()});
-$("periodToday").addEventListener("click",()=>{periodAnchor=new Date();renderPeriod()});
+$("periodToday").addEventListener("click",()=>{periodAnchor=new Date();dayFilter="all";renderPeriod()});
 document.querySelectorAll("#periodStatsFocus .stat.jump").forEach(b=>b.addEventListener("click",()=>{
  setPeriodTab(b.dataset.jump);
 }));
