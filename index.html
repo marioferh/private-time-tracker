@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -43,7 +43,14 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .cat-pick.selected{background:var(--card2);box-shadow:inset 0 0 0 1px var(--line)}.cat-pick.dim{opacity:.38}
 .stat .num.cat-focus{color:inherit}
 .item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}
-.item small{color:var(--muted)}.item-actions{display:flex;gap:6px;flex-shrink:0}.item-actions button{min-height:36px;padding:6px 9px;font-size:13px}
+.item small{color:var(--muted)}.item-actions{display:flex;gap:6px;flex-shrink:0;align-items:center}.item-actions button{min-height:36px;padding:6px 9px;font-size:13px}
+.item-main{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1}
+.item-main input.sessCheck{width:auto;min-height:0;margin:4px 0 0;accent-color:var(--accent);flex-shrink:0}
+.bulk-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;padding:10px;background:var(--card2);border-radius:12px}
+.bulk-bar[hidden]{display:none!important}
+.bulk-bar .bulk-count{font-size:13px;color:var(--muted);flex:1 1 100%}
+.bulk-bar button{flex:1 1 auto;min-width:calc(50% - 8px);font-size:13px;padding:8px 10px;min-height:40px}
+.hist-filter{margin-bottom:10px}
 .empty{color:var(--muted);text-align:center;padding:12px}.note{font-size:12px;color:var(--muted);line-height:1.45}
 .cat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .cat-name{display:flex;align-items:center;gap:8px;min-width:0}
@@ -134,6 +141,18 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 
 <div class="card">
   <div class="section">History</div>
+  <select id="histFilter" class="hist-filter" aria-label="Filter history by category">
+    <option value="">All categories</option>
+  </select>
+  <div id="bulkBar" class="bulk-bar" hidden>
+    <div class="bulk-count" id="bulkCount">0 selected</div>
+    <button class="secondary" id="bulkSelectAll" type="button">Select all shown</button>
+    <button class="secondary" id="bulkClearSel" type="button">Clear selection</button>
+    <button class="secondary" id="bulkSetTag" type="button">Set tag</button>
+    <button class="secondary" id="bulkClearTag" type="button">Clear tag</button>
+    <button class="secondary" id="bulkSetSub" type="button">Set subcategory</button>
+    <button class="danger" id="bulkDelete" type="button">Delete</button>
+  </div>
   <div id="history"></div>
 </div>
 
@@ -186,7 +205,7 @@ const DEFAULT_SUBS={read:["book","comic"],TV:["movie","series"]};
 const NOSUB="(no subcategory)";
 const NOTITLE="(no title)";
 const PALETTE=["#7c5cff","#3dd68c","#ffb020","#ff5969","#3db9ff","#e879f9","#f472b6","#a3e635","#f97316","#22d3ee"];
-const LOCALE="en-US";
+const LOCALE="es-ES";
 let db;
 try{db=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){db=null}
 if(!db||!Array.isArray(db.categories)||!Array.isArray(db.sessions)){
@@ -237,18 +256,20 @@ let selectedStatTag=null;
 let pickCat="";
 let pickSub="";
 let dayFilter="all"; // all | weekdays | weekend | 0..6 (Sun..Sat)
-const DOW_NAMES=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+let selectedSessionIdx=new Set();
+let histFilterCat="";
+const DOW_NAMES=["dom","lun","mar","mié","jue","vie","sáb"];
 const DAY_FILTERS=[
- {id:"all",label:"All"},
- {id:"weekdays",label:"Weekdays"},
- {id:"weekend",label:"Weekend"},
- {id:"1",label:"Mon"},
- {id:"2",label:"Tue"},
- {id:"3",label:"Wed"},
- {id:"4",label:"Thu"},
- {id:"5",label:"Fri"},
- {id:"6",label:"Sat"},
- {id:"0",label:"Sun"}
+ {id:"all",label:"Todos"},
+ {id:"weekdays",label:"Laborables"},
+ {id:"weekend",label:"Finde"},
+ {id:"1",label:"Lun"},
+ {id:"2",label:"Mar"},
+ {id:"3",label:"Mié"},
+ {id:"4",label:"Jue"},
+ {id:"5",label:"Vie"},
+ {id:"6",label:"Sáb"},
+ {id:"0",label:"Dom"}
 ];
 
 function sessionSub(x){return(x&&x.subcategory&&String(x.subcategory).trim())||""}
@@ -393,7 +414,7 @@ function periodTitle(period,anchor){
  const a=new Date(anchor);
  if(period==="day"){
   const t=a.toLocaleDateString(LOCALE,{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-  return isSameDay(a,Date.now())?`Today · ${t}`:t;
+  return isSameDay(a,Date.now())?`Hoy · ${t}`:t;
  }
  if(period==="week"){
   const {start,end}=periodBounds("week",a);
@@ -807,9 +828,9 @@ function renderPeriod(){
   const dk=dayKey(d);
   const t=byDay[dk]||0;
   const label=d.toLocaleDateString(LOCALE,locDate);
-  const sub=isSameDay(d,Date.now())?"today":"";
+  const sub=isSameDay(d,Date.now())?"hoy":"";
   rows.push({label,sub,t});
- }
+}
  const maxB=Math.max(...rows.map(r=>r.t),1);
  bd.innerHTML=rows.map(r=>`
   <div class="day-row">
@@ -819,18 +840,43 @@ function renderPeriod(){
   <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%;${fillColor?`background:${esc(fillColor)}`:""}"></div></div>`).join("")||'<div class="empty">No data.</div>';
 }
 
-function render(){
- renderCategories();
- const recent=[...db.sessions].sort((a,b)=>b.start-a.start).slice(0,30);
- $("history").innerHTML=recent.map((x,i)=>`
+function historyRows(){
+ const sorted=[...db.sessions].sort((a,b)=>b.start-a.start);
+ const filtered=histFilterCat?sorted.filter(x=>x.category===histFilterCat):sorted;
+ return filtered.slice(0,80).map(x=>({x,i:db.sessions.indexOf(x)}));
+}
+function updateBulkBar(){
+ const n=selectedSessionIdx.size;
+ const bar=$("bulkBar");
+ bar.hidden=n===0;
+ $("bulkCount").textContent=n?`${n} seleccionada${n===1?"":"s"}`:"Ninguna seleccionada";
+}
+function renderHistory(){
+ const prev=$("histFilter").value;
+ $("histFilter").innerHTML=`<option value="">All categories</option>`+
+  db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+ if(prev&&db.categories.includes(prev)){histFilterCat=prev;$("histFilter").value=prev}
+ else if(histFilterCat&&db.categories.includes(histFilterCat))$("histFilter").value=histFilterCat;
+ else{histFilterCat="";$("histFilter").value=""}
+ const rows=historyRows();
+ [...selectedSessionIdx].forEach(i=>{if(!db.sessions[i]) selectedSessionIdx.delete(i)});
+ $("history").innerHTML=rows.map(({x,i})=>`
   <div class="item">
-   <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(sessionTitle(x))}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+   <div class="item-main">
+    <input type="checkbox" class="sessCheck" data-i="${i}" ${selectedSessionIdx.has(i)?"checked":""} aria-label="Select session">
+    <div><b class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(sessionTitle(x))}</b><br><small>${new Date(x.start).toLocaleString(LOCALE)} · ${new Date(x.end).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+   </div>
    <div class="item-actions">
     <b style="padding-top:9px">${short((x.end-x.start)/1000)}</b>
-    <button class="secondary editSession" data-i="${db.sessions.indexOf(x)}" type="button">Edit</button>
-    <button class="danger deleteSession" data-i="${db.sessions.indexOf(x)}" type="button">Delete</button>
+    <button class="secondary editSession" data-i="${i}" type="button">Edit</button>
+    <button class="danger deleteSession" data-i="${i}" type="button">Delete</button>
    </div>
   </div>`).join("")||'<div class="empty">No sessions yet.</div>';
+ updateBulkBar();
+}
+function render(){
+ renderCategories();
+ renderHistory();
 
  if(db.active){
    const col=catColor(db.active.category);
@@ -906,6 +952,69 @@ function addCategory(){
 }
 $("addCat").addEventListener("click",addCategory);
 $("newCat").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCategory()}});
+$("histFilter").addEventListener("change",()=>{
+ histFilterCat=$("histFilter").value;
+ selectedSessionIdx.clear();
+ renderHistory();
+});
+document.addEventListener("change",e=>{
+ const ck=e.target.closest(".sessCheck");
+ if(!ck)return;
+ const i=Number(ck.dataset.i);
+ if(ck.checked) selectedSessionIdx.add(i); else selectedSessionIdx.delete(i);
+ updateBulkBar();
+});
+$("bulkSelectAll").addEventListener("click",()=>{
+ historyRows().forEach(({i})=>selectedSessionIdx.add(i));
+ renderHistory();
+});
+$("bulkClearSel").addEventListener("click",()=>{
+ selectedSessionIdx.clear();
+ renderHistory();
+});
+$("bulkSetTag").addEventListener("click",()=>{
+ if(!selectedSessionIdx.size)return;
+ const sample=sessionTag(db.sessions[[...selectedSessionIdx][0]]);
+ const t=prompt("Tag / etiqueta para las sesiones seleccionadas (vacío = quitar):",sample);
+ if(t===null)return;
+ const tag=t.trim();
+ selectedSessionIdx.forEach(i=>{
+  const x=db.sessions[i];if(!x)return;
+  if(tag) x.tag=tag; else delete x.tag;
+ });
+ save();render();
+});
+$("bulkClearTag").addEventListener("click",()=>{
+ if(!selectedSessionIdx.size)return;
+ if(!confirm(`Quitar etiqueta de ${selectedSessionIdx.size} sesión(es)?`))return;
+ selectedSessionIdx.forEach(i=>{const x=db.sessions[i];if(x) delete x.tag});
+ save();render();
+});
+$("bulkSetSub").addEventListener("click",()=>{
+ if(!selectedSessionIdx.size)return;
+ const cats=new Set([...selectedSessionIdx].map(i=>db.sessions[i]?.category).filter(Boolean));
+ if(cats.size!==1){alert("Selecciona sesiones de la misma categoría.");return}
+ const cat=[...cats][0];
+ const available=subsOf(cat);
+ if(!available.length){alert("Esa categoría no tiene subcategorías.");return}
+ const sample=sessionSub(db.sessions[[...selectedSessionIdx][0]]);
+ const t=prompt(`Subcategoría (${available.join(", ")}), vacío = ninguna:`,sample);
+ if(t===null)return;
+ const sub=t.trim();
+ if(sub&&!available.includes(sub)){alert("Subcategoría desconocida.");return}
+ selectedSessionIdx.forEach(i=>{
+  const x=db.sessions[i];if(!x)return;
+  if(sub) x.subcategory=sub; else delete x.subcategory;
+ });
+ save();render();
+});
+$("bulkDelete").addEventListener("click",()=>{
+ if(!selectedSessionIdx.size)return;
+ if(!confirm(`¿Borrar ${selectedSessionIdx.size} sesión(es)?`))return;
+ [...selectedSessionIdx].sort((a,b)=>b-a).forEach(i=>{if(db.sessions[i]) db.sessions.splice(i,1)});
+ selectedSessionIdx.clear();
+ save();render();
+});
 
 document.addEventListener("input",e=>{
  const pc=e.target.closest(".pickColor");
