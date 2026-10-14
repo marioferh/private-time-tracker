@@ -105,7 +105,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   </div>
   <div id="tagRow">
     <div class="pick-label">Tag (optional)</div>
-    <input id="sessionTag" list="tagList" placeholder="Title / name" maxlength="80" autocomplete="off">
+    <div id="tagButtons" class="pick-grid"></div>
+    <input id="sessionTag" list="tagList" placeholder="Otro tag / nombre" maxlength="80" autocomplete="off" style="margin-top:8px">
     <datalist id="tagList"></datalist>
   </div>
   <div class="row" style="margin-top:12px">
@@ -345,6 +346,7 @@ let selectedStatSub=null;
 let selectedStatTag=null;
 let pickCat="";
 let pickSub="";
+let pickTag=null; // null = auto (último usado), "" = ninguno, string = tag
 let dayFilter="all"; // all | weekdays | weekend | 0..6 (Sun..Sat)
 let selectedSessionIdx=new Set();
 let histFilterCat="";
@@ -366,20 +368,43 @@ function sessionSub(x){return(x&&x.subcategory&&String(x.subcategory).trim())||"
 function sessionTag(x){return(x&&x.tag&&String(x.tag).trim())||""}
 function subLabel(s){return s?s:NOSUB}
 function tagLabel(tag){return tag?tag:NOTITLE}
-function knownTags(cat,sub){
- const set=new Set();
- if(!cat)return [];
- db.sessions.forEach(x=>{
-  if(x.category!==cat)return;
-  if(sub!==undefined&&sub!==null&&sessionSub(x)!==sub)return;
-  if(sessionTag(x))set.add(sessionTag(x));
+function categoryUsage(){
+ const counts={};
+ db.categories.forEach(c=>{counts[c]=0});
+ db.sessions.forEach(x=>{if(Object.prototype.hasOwnProperty.call(counts,x.category)) counts[x.category]++});
+ if(db.active&&Object.prototype.hasOwnProperty.call(counts,db.active.category)) counts[db.active.category]++;
+ return counts;
+}
+function categoriesByUsage(){
+ const counts=categoryUsage();
+ return [...db.categories].sort((a,b)=>{
+  const d=(counts[b]||0)-(counts[a]||0);
+  if(d) return d;
+  return db.categories.indexOf(a)-db.categories.indexOf(b);
  });
- if(db.active&&db.active.category===cat){
-  if(sub===undefined||sub===null||sessionSub(db.active)===sub){
-   if(sessionTag(db.active))set.add(sessionTag(db.active));
-  }
- }
- return [...set].sort((a,b)=>a.localeCompare(b,LOCALE));
+}
+/** Tags for cat (+ optional sub), most recently used first. */
+function recentTags(cat,sub){
+ if(!cat)return [];
+ const last=new Map();
+ const consider=(x)=>{
+  if(!x||x.category!==cat)return;
+  if(sub){if(sessionSub(x)!==sub)return}
+  const t=sessionTag(x);
+  if(!t)return;
+  const ts=x.start||0;
+  if(!last.has(t)||ts>last.get(t)) last.set(t,ts);
+ };
+ db.sessions.forEach(consider);
+ if(db.active) consider(db.active);
+ return [...last.entries()].sort((a,b)=>b[1]-a[1]).map(([t])=>t);
+}
+function knownTags(cat,sub){
+ return recentTags(cat,sub&&sub.length?sub:null).slice().sort((a,b)=>a.localeCompare(b,LOCALE));
+}
+function autoPickTag(cat,sub){
+ const tags=recentTags(cat,sub||null);
+ return tags[0]||"";
 }
 function dayMatchesFilter(d){
  const dow=d.getDay();
@@ -398,11 +423,17 @@ function renderDayFilterChips(){
 function selectedPick(){
  return{category:pickCat,subcategory:pickSub,tag:($("sessionTag").value||"").trim()};
 }
+function currentPickTag(){
+ if(db.active) return sessionTag(db.active);
+ if(pickTag!==null) return pickTag;
+ return autoPickTag(pickCat,pickSub);
+}
 function renderPickers(){
- if(!pickCat||!db.categories.includes(pickCat)) pickCat=db.categories[0]||"";
- if(db.active){pickCat=db.active.category;pickSub=sessionSub(db.active)}
+ const ordered=categoriesByUsage();
+ if(!pickCat||!db.categories.includes(pickCat)) pickCat=ordered[0]||"";
+ if(db.active){pickCat=db.active.category;pickSub=sessionSub(db.active);pickTag=sessionTag(db.active)}
  const lock=!!db.active;
- $("catButtons").innerHTML=db.categories.map(c=>{
+ $("catButtons").innerHTML=ordered.map(c=>{
   const sel=c===pickCat?" selected":"";
   const dis=lock&&c!==pickCat?" disabled":"";
   return `<button type="button" class="pick-btn pick-cat${sel}" data-cat="${esc(c)}"${dis}><span class="cat-dot" style="background:${esc(catColor(c))}"></span>${esc(c)}</button>`;
@@ -415,8 +446,13 @@ function renderPickers(){
    `<button type="button" class="pick-btn pick-sub${!pickSub?" selected":""}" data-sub=""${lock?" disabled":""}>Any</button>`+
    subs.map(s=>`<button type="button" class="pick-btn pick-sub${pickSub===s?" selected":""}" data-sub="${esc(s)}"${lock?" disabled":""}>${esc(s)}</button>`).join("");
  }else pickSub="";
- $("tagList").innerHTML=knownTags(pickCat,subs.length?(pickSub||null):null).map(t=>`<option value="${esc(t)}"></option>`).join("");
- if(db.active)$("sessionTag").value=sessionTag(db.active);
+ const tags=recentTags(pickCat,pickSub||null);
+ const curTag=currentPickTag();
+ $("tagButtons").innerHTML=
+  `<button type="button" class="pick-btn pick-tag${!curTag?" selected":""}" data-tag=""${lock?" disabled":""}>Ninguno</button>`+
+  tags.map(t=>`<button type="button" class="pick-btn pick-tag${curTag===t?" selected":""}" data-tag="${esc(t)}"${lock?" disabled":""}>${esc(t)}</button>`).join("");
+ $("tagList").innerHTML=tags.map(t=>`<option value="${esc(t)}"></option>`).join("");
+ if(document.activeElement!==$("sessionTag")) $("sessionTag").value=curTag;
  $("sessionTag").disabled=lock;
 }
 function updateMetaRows(){renderPickers()}
@@ -989,11 +1025,18 @@ function render(){
 
 function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
 
+$("sessionTag").addEventListener("input",()=>{
+ if(db.active)return;
+ pickTag=($("sessionTag").value||"").trim();
+ document.querySelectorAll("#tagButtons .pick-tag").forEach(b=>{
+  b.classList.toggle("selected",(b.dataset.tag||"")===pickTag);
+ });
+});
 $("start").addEventListener("click",()=>{
  if(db.active)return;
  if(!pickCat){alert("Choose a category.");return}
  const subcategory=subsOf(pickCat).length?pickSub:"";
- const tag=($("sessionTag").value||"").trim();
+ const tag=($("sessionTag").value||"").trim()||currentPickTag();
  db.active={category:pickCat,start:Date.now(),...(subcategory?{subcategory}:{}),...(tag?{tag}:{})};save();render();
 });
 $("stop").addEventListener("click",()=>{
@@ -1002,7 +1045,7 @@ $("stop").addEventListener("click",()=>{
  if(sessionSub(db.active)) row.subcategory=sessionSub(db.active);
  if(sessionTag(db.active)) row.tag=sessionTag(db.active);
  db.sessions.push(row);
- db.active=null;save();render();tick();
+ db.active=null;pickTag=null;save();render();tick();
 });
 $("manualToggle").addEventListener("click",()=>{
  const body=$("manualBody");
@@ -1023,7 +1066,7 @@ $("addManual").addEventListener("click",()=>{
  const end=start.getTime()+Math.round(mins*60000);
  if(end>Date.now()+60000){alert("End time cannot be in the future.");return}
  const subcategory=subsOf(pickCat).length?pickSub:"";
- const tag=($("sessionTag").value||"").trim();
+ const tag=($("sessionTag").value||"").trim()||currentPickTag();
  const row={category:pickCat,start:start.getTime(),end};
  if(subcategory) row.subcategory=subcategory;
  if(tag) row.tag=tag;
@@ -1121,11 +1164,19 @@ document.addEventListener("click",e=>{
  }
  const pc=e.target.closest(".pick-cat");
  if(pc&&!pc.disabled){
-   pickCat=pc.dataset.cat;pickSub="";renderPickers();return;
+   pickCat=pc.dataset.cat;pickSub="";pickTag=null;
+   renderPickers();return;
  }
  const ps=e.target.closest(".pick-sub");
  if(ps&&!ps.disabled){
-   pickSub=ps.dataset.sub||"";renderPickers();return;
+   pickSub=ps.dataset.sub||"";pickTag=null;
+   renderPickers();return;
+ }
+ const pt=e.target.closest(".pick-tag");
+ if(pt&&!pt.disabled){
+   pickTag=pt.dataset.tag||"";
+   $("sessionTag").value=pickTag;
+   renderPickers();return;
  }
  const b=e.target.closest(".renameCat");
  if(b){
