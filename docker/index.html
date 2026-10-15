@@ -111,6 +111,7 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
   </div>
   <div class="row" style="margin-top:12px">
     <button class="primary" id="start" type="button">Start</button>
+    <button class="secondary" id="pause" type="button" disabled>Pause</button>
     <button class="secondary" id="stop" type="button" disabled>Stop</button>
   </div>
 </div>
@@ -1006,14 +1007,23 @@ function render(){
 
  if(db.active){
    const col=catColor(db.active.category);
-   $("statusText").textContent=sessionTitle(db.active);
-   $("statusDot").hidden=false;$("statusDot").style.background=col;
-   $("clock").style.color=col;
-   $("start").disabled=true;$("stop").disabled=false;
+   const paused=!!db.active.pausedAt;
+   $("statusText").textContent=(paused?"Paused · ":"")+sessionTitle(db.active);
+   $("statusDot").hidden=false;$("statusDot").style.background=paused?"var(--muted)":col;
+   $("clock").style.color=paused?"var(--muted)":col;
+   $("start").disabled=true;
+   $("pause").disabled=false;
+   $("pause").textContent=paused?"Resume":"Pause";
+   $("pause").classList.toggle("primary",paused);
+   $("pause").classList.toggle("secondary",!paused);
+   $("stop").disabled=false;
  }else{
    $("statusText").textContent="Idle";
    $("statusDot").hidden=true;$("clock").style.color="";
-   $("start").disabled=false;$("stop").disabled=true;
+   $("start").disabled=false;
+   $("pause").disabled=true;$("pause").textContent="Pause";
+   $("pause").classList.remove("primary");$("pause").classList.add("secondary");
+   $("stop").disabled=true;
  }
  updateMetaRows();
  if(!$("manualDate").value){
@@ -1023,7 +1033,14 @@ function render(){
  renderPeriod();
 }
 
-function tick(){$("clock").textContent=db.active?fmt((Date.now()-db.active.start)/1000):"00:00:00"}
+function activeElapsedMs(a){
+ a=a||db.active;
+ if(!a)return 0;
+ const pauseMs=Number(a.pauseMs)||0;
+ const end=a.pausedAt||Date.now();
+ return Math.max(0,end-a.start-pauseMs);
+}
+function tick(){$("clock").textContent=db.active?fmt(activeElapsedMs()/1000):"00:00:00"}
 
 $("sessionTag").addEventListener("input",()=>{
  if(db.active)return;
@@ -1037,11 +1054,22 @@ $("start").addEventListener("click",()=>{
  if(!pickCat){alert("Choose a category.");return}
  const subcategory=subsOf(pickCat).length?pickSub:"";
  const tag=($("sessionTag").value||"").trim()||currentPickTag();
- db.active={category:pickCat,start:Date.now(),...(subcategory?{subcategory}:{}),...(tag?{tag}:{})};save();render();
+ db.active={category:pickCat,start:Date.now(),pauseMs:0,...(subcategory?{subcategory}:{}),...(tag?{tag}:{})};save();render();
+});
+$("pause").addEventListener("click",()=>{
+ if(!db.active)return;
+ if(db.active.pausedAt){
+  db.active.pauseMs=(Number(db.active.pauseMs)||0)+(Date.now()-db.active.pausedAt);
+  delete db.active.pausedAt;
+ }else{
+  db.active.pausedAt=Date.now();
+ }
+ save();render();tick();
 });
 $("stop").addEventListener("click",()=>{
  if(!db.active)return;
- const row={category:db.active.category,start:db.active.start,end:Date.now()};
+ const elapsed=activeElapsedMs();
+ const row={category:db.active.category,start:db.active.start,end:db.active.start+elapsed};
  if(sessionSub(db.active)) row.subcategory=sessionSub(db.active);
  if(sessionTag(db.active)) row.tag=sessionTag(db.active);
  db.sessions.push(row);
