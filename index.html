@@ -73,6 +73,14 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .filter-chips button{flex:0 0 auto;font-size:12px;padding:7px 10px;min-height:36px;background:#25252e;color:#fff}
 .filter-chips button.active{background:var(--accent)}
+.viz-controls{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.viz-controls select{margin:0}
+#classicViz[hidden],#vizPanel[hidden],#vizGroupByWrap[hidden]{display:none!important}
+.viz-legend{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:12px;color:var(--muted);margin-bottom:10px}
+.viz-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.viz-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+.viz-svg{display:block;width:100%;min-width:300px;height:auto}
+.viz-axis{fill:var(--muted);font-size:11px}
 </style>
 </head>
 <body>
@@ -118,6 +126,21 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="secondary" id="periodToday" type="button" style="flex:1">Go to today</button>
   </div>
   <div class="filter-chips" id="dayFilterChips" hidden></div>
+  <div class="viz-controls">
+    <select id="vizMode" aria-label="Visualization">
+      <option value="classic">Clásico (donut + barras)</option>
+      <option value="timeline">Timeline</option>
+      <option value="heatmap">Heatmap hora × día</option>
+      <option value="stacked">Barras apiladas</option>
+    </select>
+    <div id="vizGroupByWrap">
+      <select id="vizGroupBy" aria-label="Group temporal charts by">
+        <option value="category">Colorear / apilar por categoría</option>
+        <option value="subcategory">Colorear / apilar por subcategoría</option>
+        <option value="tag">Colorear / apilar por tag</option>
+      </select>
+    </div>
+  </div>
   <div id="periodStatsAll" class="stats">
     <div class="stat"><div class="num" id="periodTotal">0m</div><div class="label" id="periodLabel">Total</div></div>
     <div class="stat" id="periodAvgStat"><div class="num" id="periodAvg">0m</div><div class="label" id="periodAvgLabel">Daily average</div></div>
@@ -127,18 +150,21 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="stat jump" type="button" data-jump="week"><div class="num" id="focusWeek">0m</div><div class="label">Week</div></button>
     <button class="stat jump" type="button" data-jump="month"><div class="num" id="focusMonth">0m</div><div class="label">Month</div></button>
   </div>
-  <div class="subsection" id="periodDowLabel" hidden>By day of week</div>
-  <div id="periodDow" hidden></div>
-  <div class="subsection">Share</div>
-  <div id="periodDonut"></div>
-  <div class="subsection">By category</div>
-  <div id="periodCats"></div>
-  <div class="subsection" id="periodSubsLabel" hidden>By subcategory</div>
-  <div id="periodSubs" hidden></div>
-  <div class="subsection" id="periodTagsLabel" hidden>By title</div>
-  <div id="periodTags" hidden></div>
-  <div class="subsection" id="periodBreakdownLabel" hidden>Breakdown</div>
-  <div class="day-scroll" id="periodBreakdown" hidden></div>
+  <div id="vizPanel" hidden></div>
+  <div id="classicViz">
+    <div class="subsection">Share</div>
+    <div id="periodDonut"></div>
+    <div class="subsection">By category</div>
+    <div id="periodCats"></div>
+    <div class="subsection" id="periodSubsLabel" hidden>By subcategory</div>
+    <div id="periodSubs" hidden></div>
+    <div class="subsection" id="periodTagsLabel" hidden>By title</div>
+    <div id="periodTags" hidden></div>
+    <div class="subsection" id="periodBreakdownLabel" hidden>Breakdown</div>
+    <div class="day-scroll" id="periodBreakdown" hidden></div>
+    <div class="subsection" id="periodDowLabel" hidden>By day of week</div>
+    <div id="periodDow" hidden></div>
+  </div>
 </div>
 
 <div class="card">
@@ -246,6 +272,50 @@ function catColor(c){return db.colors[c]||defaultColor(Math.max(0,db.categories.
 function subsOf(cat){return Array.isArray(db.subcategories[cat])?db.subcategories[cat]:[]}
 ensureColors();
 ensureSubcategories();
+
+(function seedPreviewData(){
+ const SEED="ptt_preview_seed_viz_subs_tags_1";
+ try{if(localStorage.getItem(SEED)==="1")return}catch(e){return}
+ const rnd=(a,b)=>a+Math.random()*(b-a);
+ const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+ const tags={
+  read:{book:["Dune","Sapiens","El Quijote","Neuromante"],comic:["Watchmen","Akira","Sandman","Maus"]},
+  TV:{movie:["Inception","Parasite","Arrival","Heat"],series:["Dark","The Bear","Severance","Shogun"]},
+  sport:{run:["5k","tempo"],gym:["push","legs"]},
+  play:{game:["Zelda","Hades","chess","Stardew"]},
+  work:{"":["deep work","meetings","email"]},
+  free:{"":["paseo","café",""]}
+ };
+ const sessions=[];
+ const now=Date.now();
+ for(let day=0;day<24;day++){
+  const base=new Date();base.setHours(0,0,0,0);base.setDate(base.getDate()-day);
+  const n=3+Math.floor(Math.random()*4);
+  let cursor=8+Math.random()*2;
+  for(let i=0;i<n&&cursor<22;i++){
+   const cat=pick(db.categories);
+   const subs=subsOf(cat);
+   const sub=subs.length?(Math.random()<0.85?pick(subs):""):"";
+   const pool=(tags[cat]&&(tags[cat][sub]||tags[cat][""]))||[];
+   const tag=pool.length&&Math.random()<0.8?pick(pool):"";
+   const dur=rnd(25,110);
+   const start=new Date(base);start.setHours(0,0,0,0);start.setMinutes(Math.floor(cursor*60));
+   const end=new Date(start.getTime()+dur*60000);
+   if(end.getTime()>now) continue;
+   const row={category:cat,start:start.getTime(),end:end.getTime()};
+   if(sub) row.subcategory=sub;
+   if(tag) row.tag=tag;
+   sessions.push(row);
+   cursor+=dur/60+rnd(0.3,1.8);
+  }
+ }
+ db.sessions=sessions;
+ db.active=null;
+ if(!Array.isArray(db.subcategories.sport)) db.subcategories.sport=["run","gym"];
+ if(!Array.isArray(db.subcategories.play)) db.subcategories.play=["game"];
+ ensureColors();
+ try{localStorage.setItem(SEED,"1");save()}catch(e){}
+})();
 const dayKey=d=>{const x=new Date(d);return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`};
 const fmt=sec=>{sec=Math.max(0,Math.floor(sec));return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(x=>String(x).padStart(2,"0")).join(":")};
 const short=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m`:m?`${m}m`:s?`${s}s`:"0m"};
@@ -261,6 +331,12 @@ let pickTag=null; // null = auto (último usado), "" = ninguno, string = tag
 let dayFilter="all"; // all | weekdays | weekend | 0..6 (Sun..Sat)
 let selectedSessionIdx=new Set();
 let histFilterCat="";
+const VIZ_KEY="ptt_viz_mode";
+const VIZ_GROUP_KEY="ptt_viz_group";
+let vizMode=(()=>{try{return localStorage.getItem(VIZ_KEY)||"classic"}catch(e){return"classic"}})();
+if(!["timeline","heatmap","stacked","classic"].includes(vizMode)) vizMode="classic";
+let vizGroupBy=(()=>{try{return localStorage.getItem(VIZ_GROUP_KEY)||"category"}catch(e){return"category"}})();
+if(!["category","subcategory","tag"].includes(vizGroupBy)) vizGroupBy="category";
 const DOW_NAMES=["dom","lun","mar","mié","jue","vie","sáb"];
 const DAY_FILTERS=[
  {id:"all",label:"Todos"},
@@ -740,6 +816,254 @@ function renderDaySessions(sessions,rangeStart,rangeEnd){
   </div>`).join("");
 }
 
+function hashStr(s){
+ let h=0;const str=String(s);
+ for(let i=0;i<str.length;i++) h=((h<<5)-h)+str.charCodeAt(i)|0;
+ return Math.abs(h);
+}
+function vizSeriesKey(x){
+ if(vizGroupBy==="category") return x.category;
+ if(vizGroupBy==="subcategory"){
+  const s=sessionSub(x);
+  if(selectedStatCat) return s;
+  return `${x.category} · ${s?s:NOSUB}`;
+ }
+ const t=sessionTag(x);
+ if(selectedStatCat) return t;
+ return `${x.category} · ${t?t:NOTITLE}`;
+}
+function vizSeriesLabel(key){
+ if(vizGroupBy==="category") return key;
+ if(selectedStatCat){
+  if(vizGroupBy==="subcategory") return subLabel(key);
+  return tagLabel(key);
+ }
+ return key;
+}
+function vizSeriesColor(key){
+ if(vizGroupBy==="category") return catColor(key);
+ if(selectedStatCat&&vizGroupBy==="subcategory"&&!key) return catColor(selectedStatCat);
+ return PALETTE[hashStr(key||"_")%PALETTE.length];
+}
+function vizLegendSelected(key){
+ if(vizGroupBy==="category") return selectedStatCat===key;
+ if(vizGroupBy==="subcategory"){
+  if(selectedStatCat) return selectedStatSub!==null&&selectedStatSub===key;
+  return false;
+ }
+ if(selectedStatCat) return selectedStatTag!==null&&selectedStatTag===key;
+ return false;
+}
+function vizLegendHtml(keys){
+ if(!keys.length)return"";
+ return `<div class="viz-legend">${keys.map(k=>{
+  const sel=vizLegendSelected(k)?" selected":"";
+  return `<button type="button" class="pick-btn viz-leg-key${sel}" data-viz-key="${esc(k)}" style="flex:0 0 auto;min-width:0;padding:6px 10px;font-size:12px;min-height:0"><i class="cat-dot" style="background:${esc(vizSeriesColor(k))}"></i>${esc(vizSeriesLabel(k))}</button>`;
+ }).join("")}</div>`;
+}
+function applyVizLegendKey(key){
+ if(vizGroupBy==="category"){setStatCat(key);return}
+ if(vizGroupBy==="subcategory"){
+  if(selectedStatCat){setStatSub(key);return}
+  const sep=" · ",i=key.indexOf(sep);
+  if(i<0)return;
+  const cat=key.slice(0,i),rest=key.slice(i+sep.length);
+  const sub=rest===NOSUB?"":rest;
+  selectedStatCat=cat;selectedStatSub=sub;selectedStatTag=null;renderPeriod();return;
+ }
+ if(selectedStatCat){setStatTag(key);return}
+ {
+  const sep=" · ",i=key.indexOf(sep);
+  if(i<0)return;
+  const cat=key.slice(0,i),rest=key.slice(i+sep.length);
+  const tag=rest===NOTITLE?"":rest;
+  selectedStatCat=cat;selectedStatSub=null;selectedStatTag=tag;renderPeriod();
+ }
+}
+function hourFrac(ms){
+ const d=new Date(ms);
+ return d.getHours()+d.getMinutes()/60+d.getSeconds()/3600;
+}
+function renderTimelineViz(sessions,rangeStart,rangeEnd){
+ const days=[];
+ for(let d=startOfDay(rangeStart);d<=rangeEnd;d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)){
+  if(!dayMatchesFilter(d)) continue;
+  if(d.getTime()>Date.now()) break;
+  days.push(new Date(d));
+ }
+ if(!days.length) return '<div class="empty">No days in this period.</div>';
+ if(days.length>45) return '<div class="empty">Timeline works best for Day or Week. Try Heatmap or Stacked for longer ranges.</div>';
+ const left=52,right=720,rowH=36,gap=8,top=28;
+ const height=top+days.length*(rowH+gap)+24;
+ const xAt=t=>left+(t/24)*(right-left);
+ const used=new Set();
+ let blocks="";
+ days.forEach((day,di)=>{
+  const ds=day.getTime(),de=endOfDay(day).getTime();
+  const y=top+di*(rowH+gap);
+  const label=days.length===1?"Hoy":day.toLocaleDateString(LOCALE,{weekday:"short",day:"numeric"});
+  blocks+=`<text class="viz-axis" x="0" y="${y+rowH*0.65}">${esc(label)}</text>`;
+  blocks+=`<rect x="${left}" y="${y}" width="${right-left}" height="${rowH}" rx="10" fill="#292932"/>`;
+  sessions.forEach(sess=>{
+   if(!matchesFocus(sess))return;
+   const a=Math.max(sess.start,ds,rangeStart.getTime());
+   const b=Math.min(sess.end,de,rangeEnd.getTime(),Date.now());
+   if(b<=a)return;
+   const h0=hourFrac(a),h1=hourFrac(b);
+   if(h1<=h0)return;
+   const key=vizSeriesKey(sess);
+   used.add(key);
+   const x0=xAt(h0),x1=xAt(h1);
+   blocks+=`<rect x="${x0}" y="${y+3}" width="${Math.max(3,x1-x0)}" height="${rowH-6}" rx="8" fill="${esc(vizSeriesColor(key))}"><title>${esc(sessionTitle(sess))} · ${fmtHourLabel(h0)}–${fmtHourLabel(h1)}</title></rect>`;
+  });
+ });
+ let axis="";
+ for(let h=0;h<=24;h+=6){
+  const xx=xAt(h);
+  axis+=`<line x1="${xx}" x2="${xx}" y1="${top-8}" y2="${height-20}" stroke="#2b2b35"/><text class="viz-axis" x="${xx}" y="${height-4}" text-anchor="middle">${h}:00</text>`;
+ }
+ return vizLegendHtml([...used])+`<div class="viz-wrap"><svg class="viz-svg" viewBox="0 0 760 ${height}" role="img" aria-label="Timeline">${axis}${blocks}</svg></div>`;
+}
+function fmtHourLabel(t){
+ const h=Math.floor(t),m=Math.round((t-h)*60)%60;
+ return `${h}:${String(m).padStart(2,"0")}`;
+}
+function renderHeatmapViz(sessions,rangeStart,rangeEnd){
+ const hours=[];for(let h=6;h<24;h++) hours.push(h);
+ const dowOrder=[1,2,3,4,5,6,0];
+ const cells={};
+ let max=0;
+ const used=new Set();
+ sessions.forEach(x=>{
+  if(!matchesFocus(x))return;
+  used.add(vizSeriesKey(x));
+  let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
+  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())));
+  while(d<=last){
+   if(dayMatchesFilter(d)){
+    for(let h=6;h<24;h++){
+     const hs=new Date(d);hs.setHours(h,0,0,0);
+     const he=new Date(d);he.setHours(h,59,59,999);
+     const a=Math.max(x.start,rangeStart.getTime(),hs.getTime());
+     const b=Math.min(x.end,rangeEnd.getTime(),he.getTime(),Date.now());
+     const sec=Math.max(0,(b-a)/1000);
+     if(sec<=0)continue;
+     const key=`${d.getDay()}-${h}`;
+     cells[key]=(cells[key]||0)+sec;
+     if(cells[key]>max)max=cells[key];
+    }
+   }
+   d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
+  }
+ });
+ if(max<=0) return '<div class="empty">No time logged in this period.</div>';
+ const fill=selectedStatCat?catColor(selectedStatCat):(used.size===1?vizSeriesColor([...used][0]):"#7c5cff");
+ const left=44,top=24,cw=36,ch=22;
+ const width=left+hours.length*cw+8;
+ const height=top+dowOrder.length*ch+8;
+ let html=`<text class="viz-axis" x="${left}" y="14">6–23 h</text>`;
+ hours.forEach((h,i)=>{
+  if(i%3)return;
+  html+=`<text class="viz-axis" x="${left+i*cw+cw/2}" y="16" text-anchor="middle">${h}</text>`;
+ });
+ dowOrder.forEach((dow,di)=>{
+  html+=`<text class="viz-axis" x="0" y="${top+di*ch+ch*0.7}">${esc(DOW_NAMES[dow])}</text>`;
+  hours.forEach((h,hi)=>{
+   const v=cells[`${dow}-${h}`]||0;
+   const op=v?(0.12+0.88*(v/max)):0.05;
+   const tip=v?`${DOW_NAMES[dow]} ${h}:00 · ${short(v)}`:`${DOW_NAMES[dow]} ${h}:00 · 0m`;
+   html+=`<rect x="${left+hi*cw+1}" y="${top+di*ch+1}" width="${cw-2}" height="${ch-2}" rx="4" fill="${esc(fill)}" fill-opacity="${op}"><title>${esc(tip)}</title></rect>`;
+  });
+ });
+ const note=vizGroupBy==="category"?"":`<p class="note" style="margin:0 0 8px">Heatmap = intensidad total. Usa la leyenda o el foco para filtrar por ${vizGroupBy==="subcategory"?"subcategoría":"tag"}.</p>`;
+ return note+vizLegendHtml([...used])+`<div class="viz-wrap"><svg class="viz-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Heatmap">${html}</svg></div>`;
+}
+function renderStackedViz(sessions,rangeStart,rangeEnd){
+ const series=[];
+ const seen=new Set();
+ const rows=[];
+ const period=currentPeriod();
+ function addSession(map,x,t){
+  const key=vizSeriesKey(x);
+  map[key]=(map[key]||0)+t;
+  if(!seen.has(key)){seen.add(key);series.push(key)}
+ }
+ if(period==="year"){
+  for(let m=0;m<12;m++){
+   const ms=startOfMonth(new Date(rangeStart.getFullYear(),m,1));
+   const me=endOfMonth(ms);
+   const map={};let total=0;
+   sessions.forEach(x=>{
+    if(!matchesFocus(x))return;
+    const t=clipSessionSeconds(x,ms,me);
+    if(t<=0)return;
+    addSession(map,x,t);total+=t;
+   });
+   rows.push({label:ms.toLocaleDateString(LOCALE,{month:"short"}),map,total});
+  }
+ }else{
+  for(let d=startOfDay(rangeStart);d<=rangeEnd;d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)){
+   if(!dayMatchesFilter(d)) continue;
+   if(d.getTime()>Date.now()) break;
+   const ds=startOfDay(d),de=endOfDay(d);
+   const map={};let total=0;
+   sessions.forEach(x=>{
+    if(!matchesFocus(x))return;
+    const t=clipSessionSeconds(x,ds,de);
+    if(t<=0)return;
+    addSession(map,x,t);total+=t;
+   });
+   const label=d.toLocaleDateString(LOCALE,{weekday:"short",day:"numeric"});
+   rows.push({label,map,total});
+  }
+ }
+ if(!rows.some(r=>r.total>0)) return '<div class="empty">No time logged in this period.</div>';
+ const ordered=series.slice().sort((a,b)=>{
+  const ta=rows.reduce((s,r)=>s+(r.map[a]||0),0);
+  const tb=rows.reduce((s,r)=>s+(r.map[b]||0),0);
+  return tb-ta;
+ });
+ const left=48,right=720,top=12,bottom=190;
+ const max=Math.max(...rows.map(r=>r.total),1);
+ const y=v=>bottom-((v/max)*(bottom-top));
+ const band=(right-left)/Math.max(rows.length,1);
+ const barW=Math.min(40,band*0.55);
+ let grid="";
+ const step=max>7200?3600:max>1800?900:300;
+ for(let t=0;t<=max;t+=step){
+  const yy=y(t);
+  grid+=`<line x1="${left}" x2="${right}" y1="${yy}" y2="${yy}" stroke="#2b2b35"/><text class="viz-axis" x="${left-6}" y="${yy+4}" text-anchor="end">${esc(short(t))}</text>`;
+ }
+ let bars="";
+ rows.forEach((r,i)=>{
+  let acc=0;
+  const cx=left+i*band+(band-barW)/2;
+  ordered.forEach(key=>{
+   const v=r.map[key]||0;if(!v)return;
+   const y1=y(acc+v),y0=y(acc);
+   bars+=`<rect x="${cx}" y="${y1}" width="${barW}" height="${Math.max(0,y0-y1-1)}" rx="3" fill="${esc(vizSeriesColor(key))}"><title>${esc(r.label)} · ${esc(vizSeriesLabel(key))} · ${short(v)}</title></rect>`;
+   acc+=v;
+  });
+  bars+=`<text class="viz-axis" x="${cx+barW/2}" y="${bottom+16}" text-anchor="middle">${esc(r.label)}</text>`;
+ });
+ return vizLegendHtml(ordered)+`<div class="viz-wrap"><svg class="viz-svg" viewBox="0 0 760 220" role="img" aria-label="Stacked bars">${grid}${bars}</svg></div>`;
+}
+function renderVizPanel(sessions,rangeStart,rangeEnd){
+ const panel=$("vizPanel"),classic=$("classicViz"),groupWrap=$("vizGroupByWrap");
+ const mode=vizMode;
+ if(mode==="classic"){
+  panel.hidden=true;classic.hidden=false;groupWrap.hidden=true;panel.innerHTML="";return false;
+ }
+ panel.hidden=false;classic.hidden=true;groupWrap.hidden=false;
+ let body="";
+ if(mode==="timeline") body=renderTimelineViz(sessions,rangeStart,rangeEnd);
+ else if(mode==="heatmap") body=renderHeatmapViz(sessions,rangeStart,rangeEnd);
+ else body=renderStackedViz(sessions,rangeStart,rangeEnd);
+ const groupNote=vizGroupBy==="category"?"":` · por ${vizGroupBy==="subcategory"?"subcategoría":"tag"}`;
+ panel.innerHTML=`<div class="subsection" style="margin-top:4px">${mode==="timeline"?"Timeline":mode==="heatmap"?"Heatmap hora × día":"Barras apiladas"}${groupNote}</div>${body}`;
+ return true;
+}
+
 function renderPeriod(){
  const period=currentPeriod();
  if(period==="day") dayFilter="all";
@@ -770,6 +1094,11 @@ function renderPeriod(){
   $("periodStatsAll").classList.remove("stats-1");
  }
  renderFocusStats(focus);
+
+ const skipClassic=renderVizPanel(ss,start,end);
+ if(skipClassic){
+  return;
+ }
 
  const entries=sortedCategoryEntries(map);
  renderDonut(entries,total);
@@ -880,7 +1209,7 @@ function renderPeriod(){
 function historyRows(){
  const sorted=[...db.sessions].sort((a,b)=>b.start-a.start);
  const filtered=histFilterCat?sorted.filter(x=>x.category===histFilterCat):sorted;
- return filtered.slice(0,80).map(x=>({x,i:db.sessions.indexOf(x)}));
+ return filtered.slice(0,5).map(x=>({x,i:db.sessions.indexOf(x)}));
 }
 function updateBulkBar(){
  const n=selectedSessionIdx.size;
@@ -1100,6 +1429,10 @@ document.addEventListener("click",e=>{
  if(df){
    dayFilter=df.dataset.dayFilter;renderPeriod();return;
  }
+ const vlk=e.target.closest(".viz-leg-key");
+ if(vlk&&vlk.dataset.vizKey!=null){
+   applyVizLegendKey(vlk.dataset.vizKey);return;
+ }
  const pc=e.target.closest(".pick-cat");
  if(pc&&!pc.disabled){
    pickCat=pc.dataset.cat;pickSub="";pickTag=null;
@@ -1222,6 +1555,18 @@ $("periodToday").addEventListener("click",()=>{periodAnchor=new Date();dayFilter
 document.querySelectorAll("#periodStatsFocus .stat.jump").forEach(b=>b.addEventListener("click",()=>{
  setPeriodTab(b.dataset.jump);
 }));
+$("vizMode").value=vizMode;
+$("vizGroupBy").value=vizGroupBy;
+$("vizMode").addEventListener("change",()=>{
+ vizMode=$("vizMode").value;
+ try{localStorage.setItem(VIZ_KEY,vizMode)}catch(e){}
+ renderPeriod();
+});
+$("vizGroupBy").addEventListener("change",()=>{
+ vizGroupBy=$("vizGroupBy").value;
+ try{localStorage.setItem(VIZ_GROUP_KEY,vizGroupBy)}catch(e){}
+ renderPeriod();
+});
 
 $("export").addEventListener("click",()=>{
  const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
