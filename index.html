@@ -106,6 +106,7 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="primary" id="start" type="button">Start</button>
     <button class="secondary" id="pause" type="button" disabled>Pause</button>
     <button class="secondary" id="stop" type="button" disabled>Stop</button>
+    <button class="danger" id="discard" type="button" disabled>Discard</button>
   </div>
 </div>
 
@@ -1256,6 +1257,7 @@ function render(){
    $("pause").classList.toggle("primary",paused);
    $("pause").classList.toggle("secondary",!paused);
    $("stop").disabled=false;
+   $("discard").disabled=false;
  }else{
    $("statusText").textContent="Idle";
    $("statusDot").hidden=true;$("clock").style.color="";
@@ -1263,6 +1265,7 @@ function render(){
    $("pause").disabled=true;$("pause").textContent="Pause";
    $("pause").classList.remove("primary");$("pause").classList.add("secondary");
    $("stop").disabled=true;
+   $("discard").disabled=true;
  }
  updateMetaRows();
  if(!$("manualDate").value){
@@ -1312,6 +1315,11 @@ $("stop").addEventListener("click",()=>{
  if(sessionSub(db.active)) row.subcategory=sessionSub(db.active);
  if(sessionTag(db.active)) row.tag=sessionTag(db.active);
  db.sessions.push(row);
+ db.active=null;pickTag=null;save();render();tick();
+});
+$("discard").addEventListener("click",()=>{
+ if(!db.active)return;
+ if(!confirm("¿Descartar el tiempo en curso? No se guardará."))return;
  db.active=null;pickTag=null;save();render();tick();
 });
 $("manualToggle").addEventListener("click",()=>{
