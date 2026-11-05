@@ -111,6 +111,24 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 </div>
 
 <div class="card">
+  <button class="manual-toggle" id="manualToggle" type="button" aria-expanded="false">
+    <span>Add time manually</span>
+    <span class="chev" id="manualChev">▸</span>
+  </button>
+  <div id="manualBody" hidden>
+    <div class="row">
+      <input id="manualDate" type="date" aria-label="Date">
+      <input id="manualTime" type="time" value="12:00" aria-label="Start time">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="manualMins" type="number" min="1" step="1" placeholder="Minutes" aria-label="Duration in minutes">
+      <button class="secondary" id="addManual" type="button">Add</button>
+    </div>
+    <p class="note" style="margin:8px 0 0">Uses the category, subcategory and tag selected above.</p>
+  </div>
+</div>
+
+<div class="card">
   <div class="section">Statistics</div>
   <div class="tabs">
     <button class="secondary active" data-period="day" type="button">Day</button>
@@ -192,24 +210,6 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="secondary" id="addCat" type="button">Add</button>
   </div>
   <div id="catList" style="margin-top:8px"></div>
-</div>
-
-<div class="card">
-  <button class="manual-toggle" id="manualToggle" type="button" aria-expanded="false">
-    <span>Add time manually</span>
-    <span class="chev" id="manualChev">▸</span>
-  </button>
-  <div id="manualBody" hidden>
-    <div class="row">
-      <input id="manualDate" type="date" aria-label="Date">
-      <input id="manualTime" type="time" value="12:00" aria-label="Start time">
-    </div>
-    <div class="row" style="margin-top:8px">
-      <input id="manualMins" type="number" min="1" step="1" placeholder="Minutes" aria-label="Duration in minutes">
-      <button class="secondary" id="addManual" type="button">Add</button>
-    </div>
-    <p class="note" style="margin:8px 0 0">Uses the category, subcategory and tag selected in the timer.</p>
-  </div>
 </div>
 
 <div class="card">
