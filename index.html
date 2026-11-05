@@ -201,6 +201,7 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
     <button class="danger" id="bulkDelete" type="button">Delete</button>
   </div>
   <div id="history"></div>
+  <button class="secondary" id="histMore" type="button" hidden style="width:100%;margin-top:10px">Show more</button>
 </div>
 
 <div class="card">
@@ -332,6 +333,9 @@ let pickTag=null; // null = auto (último usado), "" = ninguno, string = tag
 let dayFilter="all"; // all | weekdays | weekend | 0..6 (Sun..Sat)
 let selectedSessionIdx=new Set();
 let histFilterCat="";
+const HIST_DEFAULT=5;
+const HIST_STEP=20;
+let histLimit=HIST_DEFAULT;
 const VIZ_KEY="ptt_viz_mode";
 const VIZ_GROUP_KEY="ptt_viz_group";
 let vizMode=(()=>{try{return localStorage.getItem(VIZ_KEY)||"classic"}catch(e){return"classic"}})();
@@ -1207,10 +1211,12 @@ function renderPeriod(){
   <div class="bar" style="margin-top:-4px;margin-bottom:8px"><div class="fill" style="width:${r.t/maxB*100}%;${fillColor?`background:${esc(fillColor)}`:""}"></div></div>`).join("")||'<div class="empty">No data.</div>';
 }
 
-function historyRows(){
+function historyFiltered(){
  const sorted=[...db.sessions].sort((a,b)=>b.start-a.start);
- const filtered=histFilterCat?sorted.filter(x=>x.category===histFilterCat):sorted;
- return filtered.slice(0,5).map(x=>({x,i:db.sessions.indexOf(x)}));
+ return histFilterCat?sorted.filter(x=>x.category===histFilterCat):sorted;
+}
+function historyRows(){
+ return historyFiltered().slice(0,histLimit).map(x=>({x,i:db.sessions.indexOf(x)}));
 }
 function updateBulkBar(){
  const n=selectedSessionIdx.size;
@@ -1239,6 +1245,17 @@ function renderHistory(){
     <button class="danger deleteSession" data-i="${i}" type="button">Delete</button>
    </div>
   </div>`).join("")||'<div class="empty">No sessions yet.</div>';
+ const total=historyFiltered().length;
+ const more=$("histMore");
+ if(total>histLimit){
+  more.hidden=false;
+  more.textContent=`Show more (${rows.length} of ${total})`;
+ }else if(histLimit>HIST_DEFAULT&&total>HIST_DEFAULT){
+  more.hidden=false;
+  more.textContent="Show less";
+ }else{
+  more.hidden=true;
+ }
  updateBulkBar();
 }
 function render(){
@@ -1360,8 +1377,15 @@ function addCategory(){
 }
 $("addCat").addEventListener("click",addCategory);
 $("newCat").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCategory()}});
+$("histMore").addEventListener("click",()=>{
+ const total=historyFiltered().length;
+ if(histLimit>=total) histLimit=HIST_DEFAULT;
+ else histLimit=Math.min(total,histLimit+HIST_STEP);
+ renderHistory();
+});
 $("histFilter").addEventListener("change",()=>{
  histFilterCat=$("histFilter").value;
+ histLimit=HIST_DEFAULT;
  selectedSessionIdx.clear();
  renderHistory();
 });
