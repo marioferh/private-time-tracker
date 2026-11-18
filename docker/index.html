@@ -596,8 +596,7 @@ function periodTitle(period,anchor){
 }
 
 function clipSessionSeconds(x,rangeStart,rangeEnd){
- const now=Date.now();
- const endCap=Math.min(rangeEnd.getTime(),now);
+ const endCap=rangeEnd.getTime();
  if(x.end<=rangeStart.getTime()||x.start>=endCap)return 0;
  if(dayFilter==="all"){
   const a=Math.max(x.start,rangeStart.getTime()),b=Math.min(x.end,endCap);
@@ -629,12 +628,12 @@ function aggregateByWeekday(sessions,rangeStart,rangeEnd){
  const map={0:0,1:0,2:0,3:0,4:0,5:0,6:0};let total=0;
  sessions.forEach(x=>{
   let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
-  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())));
+  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime())));
   while(d<=last){
    const dow=d.getDay();
    const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
    const a=Math.max(x.start,rangeStart.getTime(),dayStart);
-   const b=Math.min(x.end,rangeEnd.getTime(),dayEnd,Date.now());
+   const b=Math.min(x.end,rangeEnd.getTime(),dayEnd);
    const sec=Math.max(0,(b-a)/1000);
    if(sec>0){map[dow]+=sec;total+=sec}
    d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
@@ -669,7 +668,7 @@ function aggregateByDayKey(sessions,rangeStart,rangeEnd){
     const dk=dayKey(d);
     const dayStart=d.getTime(),dayEnd=endOfDay(d).getTime();
     const a=Math.max(x.start,rangeStart.getTime(),dayStart);
-    const b=Math.min(x.end,rangeEnd.getTime(),dayEnd,Date.now());
+    const b=Math.min(x.end,rangeEnd.getTime(),dayEnd);
     const sec=Math.max(0,(b-a)/1000);
     if(sec>0)by[dk]=(by[dk]||0)+sec;
    }
@@ -687,7 +686,7 @@ function aggregateByMonth(sessions,rangeStart,rangeEnd){
    const ms=startOfMonth(new Date(rangeStart.getFullYear(),m,1));
    const me=endOfMonth(ms);
    const a=Math.max(x.start,ms.getTime(),rangeStart.getTime());
-   const b=Math.min(x.end,me.getTime(),rangeEnd.getTime(),Date.now());
+   const b=Math.min(x.end,me.getTime(),rangeEnd.getTime());
    const sec=Math.max(0,(b-a)/1000);
    if(sec>0){
     const key=`${ms.getFullYear()}-${String(m+1).padStart(2,"0")}`;
@@ -867,7 +866,7 @@ function renderDaySessions(sessions,rangeStart,rangeEnd){
  if(!list.length) return '<div class="empty">No sessions in this day.</div>';
  return list.map(({x,t})=>`
   <div class="day-row">
-   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(sessionTitle(x))}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
+   <div><span class="cat-name"><span class="cat-dot" style="background:${esc(catColor(x.category))}"></span>${esc(sessionTitle(x))}</span><br><small>${new Date(x.start).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})} – ${new Date(Math.min(x.end,rangeEnd.getTime())).toLocaleTimeString(LOCALE,{hour:"2-digit",minute:"2-digit"})}</small></div>
    <span>${short(t)}</span>
   </div>`).join("");
 }
@@ -963,7 +962,7 @@ function renderTimelineViz(sessions,rangeStart,rangeEnd){
   sessions.forEach(sess=>{
    if(!matchesFocus(sess))return;
    const a=Math.max(sess.start,ds,rangeStart.getTime());
-   const b=Math.min(sess.end,de,rangeEnd.getTime(),Date.now());
+   const b=Math.min(sess.end,de,rangeEnd.getTime());
    if(b<=a)return;
    const h0=hourFrac(a),h1=hourFrac(b);
    if(h1<=h0)return;
@@ -994,14 +993,14 @@ function renderHeatmapViz(sessions,rangeStart,rangeEnd){
   if(!matchesFocus(x))return;
   used.add(vizSeriesKey(x));
   let d=startOfDay(new Date(Math.max(x.start,rangeStart.getTime())));
-  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime(),Date.now())));
+  const last=endOfDay(new Date(Math.min(x.end,rangeEnd.getTime())));
   while(d<=last){
    if(dayMatchesFilter(d)){
     for(let h=6;h<24;h++){
      const hs=new Date(d);hs.setHours(h,0,0,0);
      const he=new Date(d);he.setHours(h,59,59,999);
      const a=Math.max(x.start,rangeStart.getTime(),hs.getTime());
-     const b=Math.min(x.end,rangeEnd.getTime(),he.getTime(),Date.now());
+     const b=Math.min(x.end,rangeEnd.getTime(),he.getTime());
      const sec=Math.max(0,(b-a)/1000);
      if(sec<=0)continue;
      const key=`${d.getDay()}-${h}`;
