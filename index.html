@@ -1333,7 +1333,12 @@ $("pause").addEventListener("click",()=>{
 $("stop").addEventListener("click",()=>{
  if(!db.active)return;
  const elapsed=activeElapsedMs();
- const row={category:db.active.category,start:db.active.start,end:db.active.start+elapsed};
+ const suggested=Math.max(1,Math.round(elapsed/60000));
+ const ans=prompt("Duration in minutes:",String(suggested));
+ if(ans===null)return;
+ const mins=Number(ans);
+ if(!Number.isFinite(mins)||mins<=0){alert("Invalid duration.");return}
+ const row={category:db.active.category,start:db.active.start,end:db.active.start+Math.round(mins*60000)};
  if(sessionSub(db.active)) row.subcategory=sessionSub(db.active);
  if(sessionTag(db.active)) row.tag=sessionTag(db.active);
  db.sessions.push(row);
