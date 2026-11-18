@@ -1561,31 +1561,11 @@ document.addEventListener("click",e=>{
  const es=e.target.closest(".editSession");
  if(es){
    const i=Number(es.dataset.i),x=db.sessions[i];if(!x)return;
-   const cat=prompt("Category:",x.category);if(cat===null)return;
-   const n=cat.trim();if(!n)return;
-   let sub=sessionSub(x);
-   const available=subsOf(n);
-   if(available.length){
-     const t=prompt(`Subcategory (${available.join(", ")}), empty for none:`,sub);if(t===null)return;
-     sub=t.trim();
-     if(sub&&!available.includes(sub)){alert("Unknown subcategory.");return}
-   }else sub="";
-   let tag=sessionTag(x);
-   {
-     const t=prompt("Tag / title (optional):",tag);if(t===null)return;
-     tag=t.trim();
-   }
-   let dur=prompt("Duration in minutes:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
+   const dur=prompt("Duration in minutes:",String(Math.max(1,Math.round((x.end-x.start)/60000))));
+   if(dur===null)return;
    const mins=Number(dur);
    if(!Number.isFinite(mins)||mins<=0){alert("Invalid duration.");return}
-   if(!db.categories.includes(n)){
-     db.categories.push(n);
-     db.colors[n]=defaultColor(db.categories.length-1);
-     db.subcategories[n]=[];
-   }
-   x.category=n;x.end=x.start+Math.round(mins*60000);
-   if(sub) x.subcategory=sub; else delete x.subcategory;
-   if(tag) x.tag=tag; else delete x.tag;
+   x.end=x.start+Math.round(mins*60000);
    save();render();return;
  }
  const ds=e.target.closest(".deleteSession");
