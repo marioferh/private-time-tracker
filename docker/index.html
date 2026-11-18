@@ -74,8 +74,8 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 .pick-label{font-size:12px;color:var(--muted);margin:10px 0 4px;text-align:left}
 .manual-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;background:transparent;color:inherit;padding:0;min-height:0;font-weight:700;font-size:17px;text-align:left}
 .manual-toggle .chev{color:var(--muted);font-weight:500;font-size:14px}
-#manualBody{margin-top:12px}
-#manualBody[hidden]{display:none!important}
+#manualBody,#catBody{margin-top:12px}
+#manualBody[hidden],#catBody[hidden]{display:none!important}
 .filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .filter-chips button{flex:0 0 auto;font-size:12px;padding:7px 10px;min-height:36px;background:#25252e;color:#fff}
 .filter-chips button.active{background:var(--accent)}
@@ -220,12 +220,17 @@ button{font:inherit;border:0;border-radius:13px;padding:11px 14px;min-height:44p
 </div>
 
 <div class="card">
-  <div class="section">Categories</div>
-  <div class="row">
-    <input id="newCat" placeholder="New category" maxlength="40">
-    <button class="secondary" id="addCat" type="button">Add</button>
+  <button class="manual-toggle" id="catToggle" type="button" aria-expanded="false">
+    <span>Categories</span>
+    <span class="chev" id="catChev">▸</span>
+  </button>
+  <div id="catBody" hidden>
+    <div class="row">
+      <input id="newCat" placeholder="New category" maxlength="40">
+      <button class="secondary" id="addCat" type="button">Add</button>
+    </div>
+    <div id="catList" style="margin-top:8px"></div>
   </div>
-  <div id="catList" style="margin-top:8px"></div>
 </div>
 
 <div class="card">
@@ -1391,6 +1396,13 @@ $("manualToggle").addEventListener("click",()=>{
  body.hidden=!open;
  $("manualToggle").setAttribute("aria-expanded",open?"true":"false");
  $("manualChev").textContent=open?"▾":"▸";
+});
+$("catToggle").addEventListener("click",()=>{
+ const body=$("catBody");
+ const open=body.hidden;
+ body.hidden=!open;
+ $("catToggle").setAttribute("aria-expanded",open?"true":"false");
+ $("catChev").textContent=open?"▾":"▸";
 });
 $("addManual").addEventListener("click",()=>{
  if(!pickCat){alert("Choose a category.");return}
